@@ -1,0 +1,340 @@
+---
+title: "Hilton International Hotels Case Study"
+author: "Teresiah Karumba"
+date: "2023-07-07"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+### Loading required packages 
+```{r}
+
+pacman::p_load(tidyverse, dplyr, openxlsx, janitor, ggplot2, lubridate,latexpdf)
+
+```
+
+
+### Working Directory 
+```{r}
+
+setwd("C:/Users/teresiah.karumba/Burn Manufacturing/Marketing - Business Intelligence/BI Automations 2020/Teresiah/Coding Challenges/")
+
+getwd()
+
+```
+
+### Loading the Dataset 
+```{r}
+
+hotel_df <- read.csv("hotel_bookings.csv (1)/hotel_bookings.csv") %>% clean_names()
+names(hotel_df)
+
+```
+
+### Data Structure 
+```{r}
+# Data structure
+
+class(hotel_df) #returns the class attribute of our data
+
+glimpse(hotel_df) #checking the data types of our columns
+
+head(hotel_df) #Having a view of our data set.
+
+dim(hotel_df) #shape of the data #119390 rows of data #32 rows of data
+
+summary(hotel_df) #Summary of our data set
+
+
+#character columns to factor
+
+hotel_df <- hotel_df %>% mutate(hotel = as.factor(hotel),
+                     meal = as.factor(meal),
+                     country = as.factor(country),
+                     market_segment = as.factor(market_segment),
+                     distribution_channel = as.factor(distribution_channel),
+                     reserved_room_type = as.factor(reserved_room_type),
+                     assigned_room_type = as.factor(assigned_room_type),
+                     deposit_type = as.factor(deposit_type),
+                     customer_type = as.factor(customer_type),
+                     reservation_status = as.factor(reservation_status),
+                     is_canceled = as.factor(is_canceled),
+                     is_repeated_guest = as.factor(is_repeated_guest),
+                     arrival_date_month = as.factor(arrival_date_month)
+                    )
+
+#Attaching levels to the factor variables
+hotel_df$is_canceled <- factor(hotel_df$is_canceled, labels = c("No","Yes"))
+
+hotel_df$is_repeated_guest <- factor(hotel_df$is_repeated_guest, labels = c("No","Yes"))
+
+
+#Merging Columns
+
+# hotel_df <- hotel_df %>% unite(arrival_date, arrival_date_year,arrival_date_month,arrival_date_day_of_month,sep = "-")
+
+
+```
+
+### Data Cleaning 
+##### Data Completeness
+```{r}
+listMissingColumns <- colnames(hotel_df)[ apply(hotel_df, 2, anyNA)]
+print(listMissingColumns) #Children column has missing data
+
+hotel_df %>% filter(is.na(children)) -> miss_children
+
+#omit any data with NA
+
+na.omit(hotel_df)-> hotel_df
+
+dim(hotel_df) #shape of the data #119386 rows of data #32 rows of data
+
+```
+
+### Data Analysis 
+##### How many bookings were cancelled? 
+```{r}
+
+#Creating the proportions
+
+cancelled_bookings <- hotel_df %>% 
+  group_by(is_canceled) %>% 
+  count() %>% 
+  ungroup() %>% 
+  mutate(perc = `n`/sum(`n`)) %>% 
+  mutate(labels = scales::percent(perc))
+
+
+print(cancelled_bookings)
+
+
+plot1 <- ggplot(cancelled_bookings, aes(x = "", y = perc, fill = is_canceled)) +
+  geom_col(color = "black") +
+  geom_label(aes(label = labels), colour = c("white", 1),
+            position = position_stack(vjust = 0.5),
+            show.legend = FALSE) +
+  guides(fill = guide_legend(title = "Number of Bookings Cancelled")) +
+  scale_fill_viridis_d() +
+  coord_polar(theta = "y") + 
+  theme_void()
+
+
+print(plot1)
+
+
+```
+
+### What was the booking ratio between resort hotels and city hotels? 
+```{r}
+#Creating the proportions
+
+resort <- hotel_df %>% filter(hotel == "Resort Hotel")
+city <- hotel_df %>% filter(hotel == "City Hotel")
+
+resort_count <- nrow(resort)
+city_count <- nrow(city)
+
+ratio <- resort_count/city_count
+
+# Print the ratio in ratio format
+ratio_string <- sprintf("%d:%d", resort_count, city_count)
+
+print(ratio_string)
+
+print(ratio)
+
+
+
+hotel_ratio <- hotel_df %>% 
+  group_by(hotel) %>% 
+  count() %>% 
+  ungroup() %>% 
+  mutate(perc = `n`/sum(`n`)) %>% 
+  mutate(labels = scales::percent(perc))
+
+
+
+plot2 <- ggplot(hotel_ratio, aes(x = "", y = perc, fill = hotel)) +
+  geom_col(color = "black") +
+  geom_label(aes(label = labels), colour = c("white", 1),
+            position = position_stack(vjust = 0.5),
+            show.legend = FALSE) +
+  guides(fill = guide_legend(title = "Number of Bookings in per Hotel")) +
+  scale_fill_viridis_d() +
+  coord_polar(theta = "y") + 
+  theme_void()
+
+
+print(plot2)
+
+```
+
+### What was the percentage booking for each year? 
+```{r}
+#Creating the proportions
+
+t1 <- table(hotel_df$arrival_date_year)
+
+t2 <- round(prop.table(t1)*100, digits = 2)
+
+print(t2)
+
+# Data frame with the percentages
+
+booking_yrdf <- as.data.frame(t2)
+
+
+names(booking_yrdf) <- c("Year", "Percentage")
+
+
+booking_yrdf <-  booking_yrdf[order(booking_yrdf$Percentage, decreasing = TRUE),]
+
+plot3 <- ggplot(booking_yrdf, aes(x = Year, y = Percentage)) +
+  geom_bar(stat = "identity", mapping = aes(x = Year, fill = Year)) +
+  geom_text(aes(label = Percentage), vjust = 0, colour = "black") +
+  scale_fill_viridis_d()
+
+
+#adding Chart Title
+plot3 <- plot3 + ggtitle("Percentage Bookings per Year") + theme(plot.title = element_text(hjust = 0.5))
+
+plot3 <- plot3 + labs(y="No of Bookings") 
+
+plot3 <- plot3 + labs(x="Year") 
+
+
+print(plot3)
+
+```
+
+
+### Which was the busiest month for hotels?
+```{r}
+#August was the busiest month for the hotels
+
+t3 <- table(hotel_df$arrival_date_month)
+
+# Data frame with the counts
+
+busy_month <- as.data.frame(t3)
+
+
+names(busy_month) <- c("Month", "Tally")
+
+
+busy_month <-  busy_month[order(busy_month$Tally, decreasing = TRUE),]
+
+
+plot4 <- ggplot(busy_month, aes(x = Month, y = Tally)) +
+  geom_bar(stat = "identity", mapping = aes(x = Month, fill = Month)) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_fill_viridis_d()
+
+
+#adding Chart Title
+plot4 <- plot4 + ggtitle("Bookings per Month") + theme(plot.title = element_text(hjust = 0.5))
+
+plot4 <- plot4 + labs(y="No of Bookings") 
+
+plot4 <- plot4 + labs(x="Month") 
+
+
+
+print(plot4)
+
+```
+
+
+### Most Guest come from which Country? 
+```{r}
+#Most guests came from Portugal (PRT)
+
+t4 <- table(hotel_df$country)
+
+guest_df <- as.data.frame(t4)
+
+names(guest_df) <- c("Country", "Count")
+
+guest_df <-  guest_df[order(guest_df$Count, decreasing = TRUE),]
+
+top_10_countries <- head(guest_df, n=10)
+
+
+plot5 <- ggplot(top_10_countries, aes(x = reorder(Country, - Count) , y = Count)) +
+  geom_bar(stat = "identity", mapping = aes(x = Country, fill = Country)) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+   scale_fill_viridis_d()
+
+#adding Chart Title
+plot5 <- plot5 + ggtitle("Top 10 Countries with most Guests") + theme(plot.title = element_text(hjust = 0.5))
+
+plot5 <- plot5 + labs(y="No of Guests") 
+
+plot5 <- plot5 + labs(x="Country") 
+
+
+print(plot5)
+
+
+
+```
+
+### How long do most people stay in hotels?
+```{r}
+
+#Creating a column to calculate total number of days stayed
+
+hotel_df <- hotel_df %>% 
+  mutate(total_days = stays_in_weekend_nights + stays_in_week_nights)
+
+
+avg_stay <- mean(hotel_df$total_days) %>% round(0) %>% as.character()
+
+print(paste("Average stay at the hotel is", avg_stay, "days"))
+
+
+med_stay <- median(hotel_df$total_days) %>% as.character()
+
+print(paste("Most people stay at the hotel for", med_stay, "days"))
+
+
+
+plot6 <- ggplot(hotel_df, aes(x=total_days,fill=hotel)) + 
+  geom_histogram(binwidth=1, alpha=0.5, position = 'identity') +
+  labs(title  = "Distribution of No. of stays",
+       fill = "hotel") 
+  scale_fill_viridis_d()
+
+print(plot6)
+
+```
+
+### The most booked accomodation type
+```{r}
+t5 <- table(hotel_df$customer_type)
+
+accomodation_df <- as.data.frame(t5)
+
+names(accomodation_df) <- c("Customer_Type", "Count")
+
+accomodation_df[order(accomodation_df$Count, decreasing = TRUE),]
+
+
+plot7 <- ggplot(accomodation_df, aes(x = Customer_Type , y = Count)) +
+  geom_bar(stat = "identity", mapping = aes(x = Customer_Type, fill = Customer_Type)) +
+   scale_fill_viridis_d()
+
+#adding Chart Title
+plot7 <- plot7 + ggtitle("Customer Type Distribution") + theme(plot.title = element_text(hjust = 0.5))
+
+plot7 <- plot7 + labs(y="No of Guests") 
+
+plot7 <- plot7 + labs(x="Customer Type") 
+
+
+print(plot7)
+
+
+```
